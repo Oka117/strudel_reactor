@@ -1,10 +1,50 @@
-import { useState, useEffect } from 'react';
-function DJControls({ onCpmChange, cpm, onKeyShiftChange, keyShift, volume,  onVolumeChange }) {
+﻿import { useState, useEffect } from 'react';
+import { Dropdown } from 'bootstrap';
+import CPMControls from "./DJcomponents/CPMControls";
+import VolumeControls from "./DJcomponents/VolumeControls";
+import TrackControls from "./DJcomponents/TrackControls";
+import KeyShiftControls from "./DJcomponents/KeyShiftControls";
+import EffectControls from "./DJcomponents/EffectControls";
+import SettingsControls from "./DJcomponents/SettingsControls";
+import D3Graph from "./D3Graph";
+import D3GraphScope from "./D3GraphScope";
+function DJControls({ onCpmChange, cpm, onKeyShiftChange, keyShift, volume, onVolumeChange, onToggleTrack, tracksEnabled, onEffectChange }) {
     // State variable to store the current CPM value
     const [localCpm, setLocalCpm] = useState(cpm ?? 140);
     // State variable to store the current Key shitf value
     const [localShift, setLocalShift] = useState(keyShift ?? 0);
+    // State variable to store the current master volume
+    const [localVolume, setLocalVolume] = useState(volume ?? 1);
+    // Tracks Mute
+    const muteBass = !tracksEnabled?.bass;
+    const muteArp = !tracksEnabled?.arp;
+    const muteDrums = !tracksEnabled?.drums;
+    const muteDrums2 = !tracksEnabled?.drums2;
 
+    // Effects State
+    const [enableReverb, setEnableReverb] = useState(false);
+    const [reverbAmount, setReverbAmount] = useState(0.3);
+
+    const [enableDelay, setEnableDelay] = useState(false);
+    const [delayAmount, setDelayAmount] = useState(0.15);
+
+    const [enableDistortion, setEnableDistortion] = useState(false);
+    const [distortionAmount, setDistortionAmount] = useState(0.2);
+
+    const [enableLowPass, setEnableLowPass] = useState(false);
+    const [lowPassFreq, setLowPassFreq] = useState(2000);
+
+    const [enableHighPass, setEnableHighPass] = useState(false);
+    const [highPassFreq, setHighPassFreq] = useState(500);
+
+    const [enableChorus, setEnableChorus] = useState(false);
+    const [chorusAmount, setChorusAmount] = useState(0.4);
+
+    const [enableWow, setEnableWow] = useState(false);
+    const [wowAmount, setWowAmount] = useState(2);
+    // Master Effect control
+    const [enableMasterFx, setEnableMasterFx] = useState(false);
+    
     //  Sync the local CPM value
     useEffect(() => {
         if (typeof cpm === 'number' && !Number.isNaN(cpm)) {
@@ -18,6 +58,73 @@ function DJControls({ onCpmChange, cpm, onKeyShiftChange, keyShift, volume,  onV
         }
     }, [keyShift]);
 
+    useEffect(() => {
+        const dropdowns = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+        dropdowns.forEach((el) => new Dropdown(el));
+    }, []);
+
+    // Create Effect Chain
+    useEffect(() => {
+        let chainParts = [];
+
+        // Strudel reverb = room(level)
+        if (enableReverb) {
+            chainParts.push(`room(${Number(reverbAmount).toFixed(2)})`);
+        }
+
+        // Strudel delay = delay(level)
+        if (enableDelay) {
+            chainParts.push(`delay(${Number(delayAmount).toFixed(2)})`);
+            // optional:
+            // chainParts.push(`delaytime(0.25)`);
+            // chainParts.push(`delayfeedback(0.4)`);
+        }
+
+        // Strudel distortion = shape(amount)
+        if (enableDistortion) {
+            chainParts.push(`shape(${Number(distortionAmount).toFixed(2)})`);
+        }
+
+        // Strudel low-pass = cutoff(freq)
+        if (enableLowPass) {
+            chainParts.push(`cutoff(${Math.round(lowPassFreq)})`);
+        }
+
+        // Strudel high-pass = hcutoff(freq)
+        if (enableHighPass) {
+            chainParts.push(`hcutoff(${Math.round(highPassFreq)})`);
+        }
+
+        // Strudel chorus (approx) = pan(sine.range(-d, d))
+        if (enableChorus) {
+            chainParts.push(`pan(sine.range(-${Number(chorusAmount).toFixed(2)}, ${Number(chorusAmount).toFixed(2)}))`);
+        }
+
+        // Strudel wow (pitch wobble) = speed(sine.range(1-d, 1+d))
+        if (enableWow) {
+            const depth = Number(wowAmount) * 0.05;
+            chainParts.push(`speed(sine.range(${1 - depth}, ${1 + depth}))`);
+        }
+
+        onEffectChange?.(chainParts.join('.'));
+    }, [enableReverb, reverbAmount, enableDelay, delayAmount, enableDistortion, distortionAmount,
+        enableLowPass, lowPassFreq, enableHighPass, highPassFreq, enableChorus, chorusAmount, enableWow, wowAmount]);
+
+    useEffect(() => {
+        const anyFxEnabled = enableReverb || enableDelay || enableDistortion || enableLowPass || enableHighPass || enableChorus || enableWow;
+
+        // If any FX is enabled, master on automaticly
+        if (anyFxEnabled && !enableMasterFx) {
+            setEnableMasterFx(true);
+        }
+        // If all FX disabled, master off auto
+        if (!anyFxEnabled && enableMasterFx) {
+            setEnableMasterFx(false);
+        }
+    }, [enableReverb, enableDelay, enableDistortion, enableLowPass, enableHighPass, enableChorus, enableWow,enableMasterFx]);
+
+
+    // All handle session
     const handleCpmChange = (e) => {
         let value = e.target.valueAsNumber;
         if (Number.isNaN(value)) value = 140;
@@ -37,25 +144,18 @@ function DJControls({ onCpmChange, cpm, onKeyShiftChange, keyShift, volume,  onV
 
     };
 
-    const quickCpms = [30, 60, 90, 120, 140];
-    const cpmStyles = {
-        30: 'btn-outline-secondary',
-        60: 'btn-outline-info',
-        90: 'btn-outline-success',
-        120: 'btn-outline-warning',
-        140: 'btn-outline-danger',
+    const handleVolumeChange = (e) => {
+        const value = parseFloat(e.target.value);
+        setLocalVolume(value);
+        onVolumeChange?.(value);
     };
 
-    const quickKeys = [-24, -12, -6, 0, 6, 12, 24];
-    const keyStyles = {
-        [-24]: 'btn-outline-danger',
-        [-12]: 'btn-outline-warning',
-        [-6]: 'btn-outline-info',
-        [0]: 'btn-outline-secondary',
-        [6]: 'btn-outline-success',
-        [12]: 'btn-outline-info',
-        [24]: 'btn-outline-primary',
+    const handleToggle = (trackName, checked) => {
+        onToggleTrack?.(trackName, checked);
     };
+
+   
+
 
     const handleQuickCpm = (value) => {
         setLocalCpm(value);
@@ -67,73 +167,108 @@ function DJControls({ onCpmChange, cpm, onKeyShiftChange, keyShift, volume,  onV
         if (typeof onKeyShiftChange === "function") onKeyShiftChange(value);
     };
 
+    const handleEnableReverb = (event) => setEnableReverb(event.target.checked);
+    const handleReverbAmountChange = (event) => setReverbAmount(event.target.value);
+
+    const handleEnableDelay = (event) => setEnableDelay(event.target.checked);
+    const handleDelayAmountChange = (event) => setDelayAmount(event.target.value);
+
+    const handleEnableDistortion = (event) => setEnableDistortion(event.target.checked);
+    const handleDistortionAmountChange = (event) => setDistortionAmount(event.target.value);
+
+    const handleEnableLowPass = (event) => setEnableLowPass(event.target.checked);
+    const handleLowPassFreqChange = (event) => setLowPassFreq(event.target.value);
+
+    const handleEnableHighPass = (event) => setEnableHighPass(event.target.checked);
+    const handleHighPassFreqChange = (event) => setHighPassFreq(event.target.value);
+
+    const handleEnableChorus = (event) => setEnableChorus(event.target.checked);
+    const handleChorusAmountChange = (event) => setChorusAmount(event.target.value);
+
+    const handleEnableWow = (event) => setEnableWow(event.target.checked);
+    const handleWowAmountChange = (event) => setWowAmount(event.target.value);
+
+    const handleMasterFxToggle = (event) => {
+        const enabled = event.target.checked;
+        setEnableMasterFx(enabled); setEnableReverb(enabled); setEnableDelay(enabled); setEnableDistortion(enabled);
+        setEnableLowPass(enabled); setEnableHighPass(enabled); setEnableChorus(enabled); setEnableWow(enabled);
+    };
+
+    // Effect lists for simplify
+    const effects = [
+        { key: "reverb", label: "Reverb", enable: enableReverb, amount: reverbAmount, min: 0, max: 1, step: 0.01,
+            onToggle: handleEnableReverb, onAmountChange: handleReverbAmountChange },
+        {
+            key: "delay", label: "Delay", enable: enableDelay, amount: delayAmount, min: 0, max: 1, step: 0.01,
+            onToggle: handleEnableDelay, onAmountChange: handleDelayAmountChange},
+        { key: "distortion", label: "Distortion", enable: enableDistortion, amount: distortionAmount, min: 0, max: 1, step: 0.01,
+            onToggle: handleEnableDistortion, onAmountChange: handleDistortionAmountChange},
+        { key: "lowpass", label: "Low-pass Filter", enable: enableLowPass, amount: lowPassFreq, min: 200, max: 8000, step: 50,
+            onToggle: handleEnableLowPass, onAmountChange: handleLowPassFreqChange},
+        { key: "highpass", label: "High-pass Filter", enable: enableHighPass, amount: highPassFreq, min: 100, max: 3000, step: 50,
+            onToggle: handleEnableHighPass, onAmountChange: handleHighPassFreqChange},
+        { key: "chorus", label: "Chorus", enable: enableChorus, amount: chorusAmount, min: 0, max: 1, step: 0.01,
+            onToggle: handleEnableChorus, onAmountChange: handleChorusAmountChange},
+        { key: "wow", label: "WOW", enable: enableWow, amount: wowAmount, min: 0, max: 10, step: 0.1,
+            onToggle: handleEnableWow, onAmountChange: handleWowAmountChange}
+    ];
+
+    // Effect setter list for simplify
+    const effectSetters = {
+        reverb: { setEnable: setEnableReverb, setAmount: setReverbAmount },
+        delay: { setEnable: setEnableDelay, setAmount: setDelayAmount },
+        distortion: { setEnable: setEnableDistortion, setAmount: setDistortionAmount },
+        lowpass: { setEnable: setEnableLowPass, setAmount: setLowPassFreq },
+        highpass: { setEnable: setEnableHighPass, setAmount: setHighPassFreq },
+        chorus: { setEnable: setEnableChorus, setAmount: setChorusAmount },
+        wow: { setEnable: setEnableWow, setAmount: setWowAmount }
+    };
+
     return (
         <>
-            <hr className="my-3" />
-            <div className="input-group mb-3">
-                <span className="input-group-text" id="cpm_label">setCPM</span>
-                <input type="number" className="form-control" id="cpm_text_input" value={cpm} onChange={handleCpmChange} min="1"  max="300" step="1" />
-                {/*<input type="text" className="form-control" id="cpm_text_input" placeholder="120" aria-label="Username" aria-describedby="cpm_label" />*/}
-            </div>
+            <div className="container-fluid mt-3">
+                {/* CPM & Keyshift */}
+                <div className="row g-3 mb-3">
+                    <div className="col-md-6">
+                        <div className="card h-100">
+                            <div className="card-header fw-semibold">CPM & Keyshift</div>
+                            <div className="card-body">
+                                <CPMControls cpm={cpm} localCpm={localCpm} handleCpmChange={handleCpmChange} handleQuickCpm={handleQuickCpm}/>
+                                <KeyShiftControls localShift={localShift} handleKeyShiftChange={handleKeyShiftChange} handleQuickShift={handleQuickShift}/>
+                            </div>
+                        </div>
+                    </div>
 
-            {/* Button for quick change cpm */}
-            <div className="btn-group mb-3 w-100" role="group" aria-label="Quick CPM Buttons">
-                {quickCpms.map((val) => (
-                    <button key={val} type="button" className={`btn ${cpmStyles[val]} ${localCpm === val ? 'active' : ''} btn-sm`} onClick={() => handleQuickCpm(val)} >
-                        {val}
-                    </button>
-                ))}
-            </div>
+                    {/* Volume & Tracks */}
+                    <div className="col-md-6">
+                        <div className="card h-100">
+                            <div className="card-header fw-semibold">Volume & Tracks</div>
+                            <div className="card-body">
+                                <VolumeControls localVolume={localVolume} handleVolumeChange={handleVolumeChange}/>
 
-            {/* Volume */}
-            <hr className="my-3" />
-            <div className="input-group mb-3">
-                <label htmlFor="volume_range" className="form-label">Volume</label>
-                <input type="range" className="form-range" min="0" max="2" step="0.1" onMouseUp={onVolumeChange} id="volume_range" />
-            </div>
+                                <TrackControls muteBass={muteBass} muteArp={muteArp} muteDrums={muteDrums}  muteDrums2={muteDrums2} handleToggle={handleToggle}/>
+                            </div>
+                        </div>
+                    </div>
 
-            {/* CheckBox for select instruments */}
-            <hr className="my-3" />
-            <div className="input-group mb-3">
-                <div className="form-check">
-                    <input className="form-check-input" type="checkbox" value="" id="s1" />
-                    <label className="form-check-label" htmlFor="s1">
-                            s1
-                        </label>
                 </div>
-                <div className="form-check">
-                    <input className="form-check-input" type="checkbox" value="" id="d1" />
-                    <label className="form-check-label" htmlFor="d1">
-                            d1
-                        </label>
-                </div>
-                <div className="form-check">
-                    <input className="form-check-input" type="checkbox" value="" id="d2" />
-                    <label className="form-check-label" htmlFor="d2">
-                            d2
-                        </label>
+
+                {/* Effect/Settings & D3 */}
+                <div className="row g-3">
+
+                    {/* Effects & Settings */}
+                    <div className="col-md-6 d-flex flex-column gap-3">
+                        <EffectControls enableMasterFx={enableMasterFx} handleMasterFxToggle={handleMasterFxToggle} effects={effects}/>
+                        <SettingsControls effectSetters={effectSetters} />
+                    </div>
+
+                    {/* D3 Graphs */}
+                    <div className="col-md-6 d-flex flex-column">
+                        <D3Graph />
+                        <D3GraphScope />
+                    </div>
                 </div>
             </div>
-
-            {/* Key shifter */}
-            <hr className="my-3" />
-            <h6>Key Shift</h6>
-
-            <div className="input-group mb-3">
-                <span className="input-group-text">Semitones</span>
-                <input type="number" className="form-control" id="key_shift_input" value={localShift} onChange={handleKeyShiftChange} placeholder="0" min="-12" max="12" step="1" />
-            </div>
-
-            {/* Button for quick change cpm */}
-            <div className="btn-group mb-3 w-100" role="group" aria-label="Quick Key Buttons">
-                {quickKeys.map((val) => (
-                    <button key={val} type="button" className={`btn ${keyStyles[val]} ${localShift === val ? 'active' : ''} btn-sm`} onClick={() => handleQuickShift(val)} >
-                        {val > 0 ? `+${val}` : val}
-                    </button>
-
-                ))}
-            </div>
-
       </>
   );
 }

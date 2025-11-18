@@ -13,74 +13,37 @@ import DJControls from './components/DJControls';
 import PlayButtons from './components/PlayButtons';
 import ProcButtons from './components/ProcButtons';
 import PreprocessTextarea from './components/PreprocessTextarea';
-import Preprocess from './components/Preprocess';
+import JsonButtons from "./components/JsonButtons";
+
 
 let globalEditor = null;
 
 const handleD3Data = (event) => {
     console.log(event.detail);
 };
-
-//export function SetupButtons() {
-
-//    document.getElementById('play').addEventListener('click', () => globalEditor.evaluate());
-//    document.getElementById('stop').addEventListener('click', () => globalEditor.stop());
-//    document.getElementById('process').addEventListener('click', () => {
-//        Proc()
-//    }
-//    )
-//    document.getElementById('process_play').addEventListener('click', () => {
-//        if (globalEditor != null) {
-//            Proc()
-//            globalEditor.evaluate()
-//        }
-//    }
-//    )
-//}
-
-
-
-//export function ProcAndPlay() {
-//    if (globalEditor != null && globalEditor.repl.state.started == true) {
-//        console.log(globalEditor)
-//        Proc()
-//        globalEditor.evaluate();
-//    }
-//}
-
-//export function Proc() {
-
-//    let proc_text = document.getElementById('proc').value
-//    let proc_text_replaced = proc_text.replaceAll('<p1_Radio>', ProcessText);
-//    ProcessText(proc_text);
-//    globalEditor.setCode(proc_text_replaced)
-//}
-
-//export function ProcessText(match, ...args) {
-
-//    let replace = ""
-//    //if (document.getElementById('flexRadioDefault2').checked) {
-//    //    replace = "_"
-//    //}
-
-//    return replace
-//}
-
 export default function StrudelDemo() {
 
     const hasRun = useRef(false);
 
     const [songText, setSongText] = useState(stranger_tune);
+    // Current CPM
     const [cpm, setCpm] = useState(140);
+    // Keyshift
     const [keyShift, setKeyShift] = useState(0);
+    // Track song playing statement
     const [isPlaying, setIsPlaying] = useState(false);
-    const [procText, setProcText] = useState(stranger_tune);
-    const [volume, setVolume] = useState(1);
-    const [state, setState] = useState("stop");
+    // Global volume 
+    const [masterVolume, setMasterVolume] = useState(1);
+    // Track toggle
+    const [tracksEnabled, setTracksEnabled] = useState({
+        bass: true,
+        arp: true,
+        drums: true,
+        drums2: true,
+    });
 
-    
-
-
+    // Effect chain string
+    const [effectChain, setEffectChain] = useState("");
 
     const handlePlay = () => {
 
@@ -94,12 +57,68 @@ export default function StrudelDemo() {
         setIsPlaying(false);
     }
 
-    useEffect(() => {
-        if (state === "play") {
-            handlePlay();
-        }
+    // Toggle a specific track 
+    const handleToggleTrack = (name, enabled) => {
+        setTracksEnabled((prev) => ({ ...prev, [name]: enabled }));
+    };
 
-    },[volume])
+    // Export current Strudel parameters into a JSON file
+    const handleSaveJson = () => {
+        // Get real time song string
+        const processed = songText
+            .replaceAll("<cpm>", cpm.toString())
+            .replaceAll("<keyshift>", keyShift.toString())
+            .replaceAll("<volume>", masterVolume.toString())
+            .replaceAll("<gain_bass>", tracksEnabled.bass ? "1" : "0")
+            .replaceAll("<gain_arp>", tracksEnabled.arp ? "1" : "0")
+            .replaceAll("<gain_drums>", tracksEnabled.drums ? "1" : "0")
+            .replaceAll("<gain_drums2>", tracksEnabled.drums2 ? "1" : "0")
+            .replaceAll("<effect_chain>", effectChain ? `.${effectChain}` : "");
+
+        // All configurable settings
+        const settingsObject = { cpm, keyShift, masterVolume, tracksEnabled, processed };
+        // Convert obj to download file
+        const jsonBlob = new Blob([JSON.stringify(settingsObject, null, 2)], {
+            type: "application/json"
+        });
+
+        const jsonUrl = URL.createObjectURL(jsonBlob);
+        const downloadLink = document.createElement("a");
+        downloadLink.href = jsonUrl;
+        downloadLink.download = "strudel-settings.json";
+        downloadLink.click();
+        URL.revokeObjectURL(jsonUrl);
+    };
+
+    // Read json file and restore settings
+    const handleLoadJson = (event) => {
+        const selectedFile = event.target.files[0];
+        if (!selectedFile) return;
+
+        const fileReader = new FileReader();
+        fileReader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+
+                // Restore each setting if present
+                if (typeof data.cpm === "number") setCpm(data.cpm);
+                if (typeof data.keyShift === "number") setKeyShift(data.keyShift);
+                if (typeof data.masterVolume === "number") setMasterVolume(data.masterVolume);
+                if (typeof data.songText === "string") setSongText(data.songText);
+                if (typeof data.tracksEnabled === "object") setTracksEnabled(data.tracksEnabled);
+
+                alert("JSON load successfully");
+            } catch {
+                alert("Invalid JSON file.");
+            }
+        };
+        fileReader.readAsText(selectedFile);
+    };
+    // Update effect chain string
+    const handleEffectChange = (newEffectChain) => {
+        setEffectChain(newEffectChain);
+    };
+
 
 useEffect(() => {
 
@@ -142,7 +161,13 @@ useEffect(() => {
 
     const processed = procText
         .replaceAll("<cpm>", cpm.toString())
-        .replaceAll("<keyshift>", keyShift.toString());
+        .replaceAll("<keyshift>", keyShift.toString())
+        .replaceAll("<volume>", masterVolume.toString())
+        .replaceAll("<gain_bass>", tracksEnabled.bass ? "1" : "0")
+        .replaceAll("<gain_arp>", tracksEnabled.arp ? "1" : "0")
+        .replaceAll("<gain_drums>", tracksEnabled.drums ? "1" : "0")
+        .replaceAll("<gain_drums2>", tracksEnabled.drums2 ? "1" : "0")
+        .replaceAll("<effect_chain>", effectChain ? `.${effectChain}` : "");
 
     //globalEditor.setCode(songText);
     globalEditor?.setCode(processed);
@@ -151,41 +176,83 @@ useEffect(() => {
         globalEditor.evaluate();
     }
 
-}, [procText, cpm, keyShift, isPlaying]);
+}, [songText, cpm, keyShift, masterVolume, tracksEnabled, effectChain, isPlaying]);
 
 
 return (
     <div>
-        <h2>Strudel Demo</h2>
-        <main>
-
+        <nav className="navbar navbar-expand-lg navbar-dark bg-dark mb-3">
             <div className="container-fluid">
-                <div className="row">
-                    <div className="col-md-8" style={{ maxHeight: '50vh', overflowY: 'auto' }}>
-                        <PreprocessTextarea defaultValue={procText} onChange={(e) => setProcText(e.target.value)} />
-                    </div>
-                    <div className="col-md-4">
+                <a className="navbar-brand fw-bold" href="/app">
+                    Strudel Digital Audio Workstation
+                </a>
+                <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar">
+                    <span className="navbar-toggler-icon"></span>
+                </button>
 
-                        <nav>
-                            <ProcButtons onProc={() => { }} onProcPlay={() => { setState("play"); handlePlay() }} />
-                            <br />
-                            <PlayButtons onProc={() => { }} onProcPlay={() => { setState("play"); handlePlay() }}
-                                onStop={() => { setState("stop"); handleStop() }} />
-                        </nav>
+                <div className="collapse navbar-collapse" id="mainNavbar">
+                    <ul className="navbar-nav me-auto mb-2 mb-lg-0">
+                    </ul>
+                    <button className="btn btn-outline-light"
+                        onClick={() => {document.body.classList.toggle("light-theme");}}>
+                        Switch Theme
+                    </button>
+                </div>
+            </div>
+        </nav>
+        <main className="container-fluid">
+
+            <div className="row mb-3">
+                <div className="col-12 d-flex justify-content-between align-items-center">
+                    <PlayButtons onPlay={handlePlay} onStop={handleStop} />
+                    <JsonButtons onSaveJson={handleSaveJson} onLoadJson={handleLoadJson} />
+                </div>
+            </div>
+
+            <DJControls cpm={cpm} onCpmChange={setCpm} keyShift={keyShift} onKeyShiftChange={setKeyShift} volume={masterVolume}
+                onVolumeChange={setMasterVolume} tracksEnabled={tracksEnabled} onToggleTrack={handleToggleTrack} onEffectChange={handleEffectChange}/>
+
+            <div className="row mt-4">
+                <div className="col-md-6">
+                    <div className="accordion" id="accordion-left">
+                        <div className="accordion-item">
+                            <h2 className="accordion-header">
+                                <button className="accordion-button" data-bs-toggle="collapse"
+                                    data-bs-target="#preprocess-area">
+                                    Preprocess Textarea
+                                </button>
+                            </h2>
+                            <div id="preprocess-area" className="accordion-collapse collapse show">
+                                <div className="accordion-body" style={{ maxHeight: "60vh", overflowY: "auto" }}>
+                                    <PreprocessTextarea defaultValue={songText} onChange={(e) => setSongText(e.target.value)}/>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div className="row">
-                    <div className="col-md-8" style={{ maxHeight: '50vh', overflowY: 'auto' }}>
-                        <div id="editor" />
-                        <div id="output" />
-                    </div>
-                    <div className="col-md-4">
-                        <DJControls cpm={cpm} onCpmChange={(val) => setCpm(val)} keyShift={keyShift} onKeyShiftChange={(val) => setKeyShift(val)} />
+
+                <div className="col-md-6">
+                    <div className="accordion" id="accordion-right">
+                        <div className="accordion-item">
+                            <h2 className="accordion-header">
+                                <button className="accordion-button"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#editor-area">
+                                    Strudel Editor Output
+                                </button>
+                            </h2>
+                            <div id="editor-area" className="accordion-collapse collapse show">
+                                <div className="accordion-body" style={{ maxHeight: "60vh", overflowY: "auto" }}>
+                                    <div id="editor"></div>
+                                    <div id="output"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
             <canvas id="roll"></canvas>
-        </main >
+        </main>
     </div >
 );
 
